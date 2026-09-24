@@ -2,6 +2,7 @@
 <html lang="en">
 
 <head>
+
   <meta charset="UTF-8">
 
   <meta name="viewport"
@@ -9,8 +10,7 @@
 
   <title>PCA Region VII Attendance</title>
 
-  <script src="https://unpkg.com/html5-qrcode"
-          type="text/javascript"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
   <style>
 
@@ -44,25 +44,22 @@
     }
 
     #reader {
+      width: 500px;
+      max-width: 90%;
+      margin: auto;
       background: white;
       padding: 15px;
       border-radius: 15px;
       box-shadow: 0 4px 15px rgba(0,0,0,0.15);
     }
 
-    .instruction {
-      font-size: 22px;
-      font-weight: bold;
-      margin-bottom: 20px;
-    }
-
-    #result {
-      margin-top: 25px;
-      padding: 25px;
+    #status {
+      margin: 20px auto;
+      padding: 15px;
+      max-width: 500px;
       background: white;
-      border-radius: 15px;
-      display: none;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+      border-radius: 10px;
+      font-weight: bold;
     }
 
     .success {
@@ -85,9 +82,13 @@
       margin-top: 15px;
     }
 
-    .time {
-      font-size: 20px;
-      margin-top: 10px;
+    #result {
+      display: none;
+      margin: 20px auto;
+      padding: 25px;
+      max-width: 500px;
+      background: white;
+      border-radius: 15px;
     }
 
   </style>
@@ -109,20 +110,22 @@
 
   <div class="container">
 
+    <h2>📷 QR ATTENDANCE SCANNER</h2>
 
-    <div class="instruction">
-
-      📷 PLEASE PRESENT YOUR QR CODE
-
-    </div>
+    <p>
+      Please allow camera access when your browser asks.
+    </p>
 
 
     <div id="reader"></div>
 
 
-    <div id="result">
+    <div id="status">
+      Starting camera...
+    </div>
 
-      <div id="status"></div>
+
+    <div id="result">
 
       <div id="employeeName"
            class="employee-name"></div>
@@ -134,11 +137,9 @@
       <div id="attendanceAction"
            class="action"></div>
 
-      <div id="attendanceTime"
-           class="time"></div>
+      <div id="attendanceTime"></div>
 
     </div>
-
 
   </div>
 
@@ -147,32 +148,58 @@
 
 
 // =====================================================
-// GOOGLE APPS SCRIPT BACKEND
+// YOUR GOOGLE APPS SCRIPT URL
 // =====================================================
-
-// WE WILL PUT YOUR APPS SCRIPT URL HERE LATER.
 
 const APPS_SCRIPT_URL =
-  https://script.google.com/macros/s/AKfycbyYXzYB0h_ITloePpOECFJb4sxYhF3N6bwdzpl9eLzVRpLbaATn3uAMpG7tyNmmH1H0/exec;
+  "https://script.google.com/macros/s/AKfycbyYXzYB0h_ITloePpOECFJb4sxYhF3N6bwdzpl9eLzVRpLbaATn3uAMpG7tyNmmH1H0/exec";
 
 
 // =====================================================
-// QR SCANNER
+// STATUS MESSAGE
 // =====================================================
 
-let scanner;
+function setStatus(message, type = "") {
 
-let processing = false;
+  const status =
+    document.getElementById("status");
+
+  status.innerText = message;
+
+  status.className = type;
+
+}
 
 
-function startScanner() {
+// =====================================================
+// START CAMERA
+// =====================================================
 
-  scanner = new Html5Qrcode("reader");
+function startCamera() {
+
+  setStatus("Requesting camera access...");
+
+
+  if (!window.Html5Qrcode) {
+
+    setStatus(
+      "ERROR: QR scanner library did not load.",
+      "error"
+    );
+
+    return;
+  }
+
+
+  const scanner =
+    new Html5Qrcode("reader");
 
 
   scanner.start(
 
-    { facingMode: "user" },
+    {
+      facingMode: "user"
+    },
 
     {
       fps: 10,
@@ -181,25 +208,22 @@ function startScanner() {
         width: 250,
         height: 250
       }
-    },
 
+    },
 
     function(decodedText) {
 
-      if (processing) {
-        return;
-      }
+      console.log(
+        "QR CODE DETECTED:",
+        decodedText
+      );
 
-
-      processing = true;
-
-
-      console.log("QR detected:", decodedText);
-
-
-      // Stop scanner temporarily
 
       scanner.stop().then(function() {
+
+        setStatus(
+          "QR detected. Recording attendance..."
+        );
 
         sendAttendance(decodedText);
 
@@ -207,22 +231,35 @@ function startScanner() {
 
     },
 
-
     function(errorMessage) {
 
-      // Normal scanning errors are ignored.
+      // Normal QR scanning messages.
+      // We intentionally don't display them.
 
     }
 
   )
 
-  .catch(function(error) {
+  .then(function() {
 
-    showError(
-      "Camera could not be started. Please allow camera access."
+    setStatus(
+      "✓ CAMERA READY — PRESENT YOUR QR CODE"
     );
 
-    console.error(error);
+  })
+
+  .catch(function(error) {
+
+    console.error(
+      "CAMERA ERROR:",
+      error
+    );
+
+
+    setStatus(
+      "CAMERA ERROR: " + error,
+      "error"
+    );
 
   });
 
@@ -230,7 +267,7 @@ function startScanner() {
 
 
 // =====================================================
-// SEND QR TO GOOGLE APPS SCRIPT
+// SEND ATTENDANCE TO GOOGLE APPS SCRIPT
 // =====================================================
 
 function sendAttendance(employeeId) {
@@ -250,17 +287,17 @@ function sendAttendance(employeeId) {
 
   .then(function(data) {
 
-    showResult(data);
+    displayResult(data);
 
   })
 
   .catch(function(error) {
 
-    showError(
-      "Could not connect to the attendance system."
+    setStatus(
+      "Could not connect to attendance system: " +
+      error,
+      "error"
     );
-
-    console.error(error);
 
   });
 
@@ -268,57 +305,72 @@ function sendAttendance(employeeId) {
 
 
 // =====================================================
-// DISPLAY RESULT
+// DISPLAY ATTENDANCE RESULT
 // =====================================================
 
-function showResult(data) {
+function displayResult(data) {
 
 
-  const resultBox =
+  const result =
     document.getElementById("result");
 
 
-  resultBox.style.display = "block";
+  result.style.display = "block";
 
 
   if (!data.success) {
 
-    showError(data.message);
+    setStatus(
+      "✗ " + data.message,
+      "error"
+    );
 
     return;
 
   }
 
 
-  document.getElementById("status").innerHTML =
-    "<h2 class='success'>✓ ATTENDANCE RECORDED</h2>";
+  setStatus(
+    "✓ ATTENDANCE RECORDED",
+    "success"
+  );
 
 
-  document.getElementById("employeeName").innerText =
+  document.getElementById(
+    "employeeName"
+  ).innerText =
     data.employee.name;
 
 
-  document.getElementById("employeePosition").innerText =
+  document.getElementById(
+    "employeePosition"
+  ).innerText =
     data.employee.position;
 
 
-  document.getElementById("employeeOffice").innerText =
+  document.getElementById(
+    "employeeOffice"
+  ).innerText =
     data.employee.office;
 
 
-  document.getElementById("attendanceAction").innerText =
+  document.getElementById(
+    "attendanceAction"
+  ).innerText =
     data.action;
 
 
-  document.getElementById("attendanceTime").innerText =
+  document.getElementById(
+    "attendanceTime"
+  ).innerText =
     data.time;
 
 
-  // Wait 4 seconds then scan next employee
-
   setTimeout(function() {
 
-    resetScanner();
+    result.style.display = "none";
+
+    startCamera();
 
   }, 4000);
 
@@ -326,60 +378,10 @@ function showResult(data) {
 
 
 // =====================================================
-// ERROR
+// START
 // =====================================================
 
-function showError(message) {
-
-
-  const resultBox =
-    document.getElementById("result");
-
-
-  resultBox.style.display = "block";
-
-
-  document.getElementById("status").innerHTML =
-    "<h2 class='error'>✗ ERROR</h2>";
-
-
-  document.getElementById("employeeName").innerText =
-    message;
-
-
-  setTimeout(function() {
-
-    resetScanner();
-
-  }, 3000);
-
-}
-
-
-// =====================================================
-// RESET
-// =====================================================
-
-function resetScanner() {
-
-
-  document.getElementById("result")
-    .style.display = "none";
-
-
-  processing = false;
-
-
-  startScanner();
-
-}
-
-
-// =====================================================
-// START CAMERA
-// =====================================================
-
-startScanner();
+startCamera();
 
 
 </script>
